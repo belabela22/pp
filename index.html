@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <!--
+    Application: Accessible Multi-Step Medical Intake Form
+    File: index.html
+    Purpose:
+      - Provide a complete, semantic HTML5 structure for a multi-step form (4 steps):
+        1) Demographics
+        2) Insurance
+        3) Medical History
+        4) Review & Submit
+      - Accessibility-first design using proper ARIA roles, attributes, and semantics.
+      - Each step is grouped with <fieldset> and <legend>.
+      - Live regions for status/validation updates.
+      - Keyboard and screen reader friendly structure.
+    Notes:
+      - See style.css for all styling (layout, responsive, print, focus, HC theme).
+      - See script.js for all behaviors (validation, navigation, autosave, A11Y, etc.).
+    Authoring priorities:
+      - Semantics: headings, landmarks, labels, relationships
+      - A11Y: ARIA roles/attributes, focus management, live regions
+      - Maintainability: clear id/class names, structured comments
+      - Performance: minimal DOM where practical, defer scripts
+  -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Accessible Multi-Step Medical Intake Form</title>
+
+  <!-- App Icons / Favicons (optional, safe placeholders) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Ctext%20y='24'%20font-size='24'%3E🩺%3C/text%3E%3C/svg%3E" />
+
+  <!-- CSS: All layout, theming, animations, responsive, print handled in style.css -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Preload fonts or assets if needed (none external) -->
+
+  <!-- Security headers recommendation (server-level; here for documentation)
+       Content-Security-Policy enabling self-hosted CSS/JS only -->
+  <!--
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self';" />
+  -->
+</head>
+<body>
+  <!--
+    Skip Link:
+      - Improves keyboard accessibility by allowing users to jump directly to the main content
+      - Visible on focus (styled in CSS)
+  -->
+  <a class="skip-link" href="#main" id="skip-link">Skip to main content</a>
+
+  <!--
+    App Header:
+      - Contains app title and global controls (High contrast, Print)
+      - role="banner" landmark for screen readers
+  -->
+  <header class="app-header" role="banner">
+    <div class="container header-inner">
+      <h1 class="app-title" id="app-title">Medical Intake</h1>
+
+      <nav class="header-actions" aria-label="Global controls">
+        <!-- High contrast mode toggle (persisted via JS; aria-pressed reflects state) -->
+        <button
+          id="toggle-contrast"
+          class="btn btn-ghost"
+          type="button"
+          aria-pressed="false"
+          aria-label="Toggle high contrast mode">
+          High contrast
+        </button>
+
+        <!-- Print trigger; JS will open print dialog and adjust view as needed -->
+        <button
+          id="print-form"
+          class="btn btn-ghost"
+          type="button"
+          aria-label="Print this form">
+          Print
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!--
+    Main:
+      - role="main" landmark containing the entire multi-step form experience
+      - Includes:
+        * Progress bar
+        * Form steps (fieldset/legend)
+        * Navigation (Back/Next/Submit)
+      - The form uses no native HTML multi-step; we manage steps with JS + ARIA.
+  -->
+  <main id="main" class="app-main" role="main">
+    <div class="container">
+
+      <!--
+        Progress Bar:
+          - ARIA role="progressbar" with aria-valuenow, aria-valuemin, aria-valuemax.
+          - Also a visible list of steps with numbers and labels; current step gets aria-current="step".
+          - JS will update the bar and the active step indicator.
+      -->
+      <section class="progress" aria-label="Form progress">
+        <div class="progressbar-wrapper" role="progressbar"
+             aria-valuemin="1" aria-valuemax="4" aria-valuenow="1"
+             aria-labelledby="progressbar-label" id="progressbar">
+          <div class="progressbar-fill" id="progressbar-fill" style="width: 25%;"></div>
+        </div>
+        <p id="progressbar-label" class="sr-only">Step progress</p>
+
+        <ol class="steps" role="list" aria-label="Steps">
+          <li class="step is-active" id="step-indicator-1" aria-current="step">
+            <span class="step-index" aria-hidden="true">1</span>
+            <span class="step-label">Demographics</span>
+          </li>
+          <li class="step" id="step-indicator-2">
+            <span class="step-index" aria-hidden="true">2</span>
+            <span class="step-label">Insurance</span>
+          </li>
+          <li class="step" id="step-indicator-3">
+            <span class="step-index" aria-hidden="true">3</span>
+            <span class="step-label">Medical History</span>
+          </li>
+          <li class="step" id="step-indicator-4">
+            <span class="step-index" aria-hidden="true">4</span>
+            <span class="step-label">Review &amp; Submit</span>
+          </li>
+        </ol>
+      </section>
+
+      <!--
+        Live Regions:
+          - Polite region for non-urgent updates (e.g., autosave, status).
+          - Assertive region for critical validation errors.
+          - JS will send announcements here; hidden visually, but accessible to SR.
+      -->
+      <div class="sr-live" aria-live="polite" aria-atomic="true" id="live-region-polite"></div>
+      <div class="sr-live" aria-live="assertive" aria-atomic="true" id="live-region-assertive"></div>
+
+      <!--
+        Form:
+          - role="form" with novalidate (we handle validation via JS + HTML constraints)
+          - Method POST (no action; simulated submission via JS).
+          - Each step uses <fieldset> and <legend> for semantics, plus role="group".
+          - Inputs have associated <label for="">; errors use aria-describedby.
+      -->
+      <form id="intake-form" role="form" method="post" novalidate aria-labelledby="form-title">
+        <h2 id="form-title" class="sr-only">Patient medical intake multi-step form</h2>
+
+        <!--
+          Step 1: Demographics
+          - Personal and contact details with HTML5 validation
+          - Patterns for phone and postal code
+          - Name auto-capitalization handled in JS
+          - Date of Birth with min/max (no future DOB)
+        -->
+        <fieldset
+          id="step-1"
+          class="form-step is-current"
+          role="group"
+          aria-labelledby="legend-step-1"
+          data-step="1"
+          data-step-name="Demographics"
+        >
+          <legend id="legend-step-1">Demographics</legend>
+          <p class="step-intro" id="intro-step-1">
+            Please provide your personal and contact information. All fields marked required must be completed to continue.
+          </p>
+
+          <!-- Name row -->
+          <div class="grid grid-2">
+            <div class="form-control">
+              <label for="firstName">First name <span aria-hidden="true">*</span></label>
+              <input
+                id="firstName"
+                name="firstName"
+                type="text"
+                inputmode="text"
+                autocomplete="given-name"
+                spellcheck="false"
+                required
+                maxlength="50"
+                aria-describedby="firstName-help firstName-error firstName-valid"
+              />
+              <div class="assistive">
+                <small id="firstName-help" class="help">Enter your legal first name (will auto-capitalize).</small>
+                <small id="firstName-valid" class="valid" hidden>Looks good!</small>
+                <small id="firstName-error" class="error" role="alert" hidden>First name is required.</small>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="lastName">Last name <span aria-hidden="true">*</span></label>
+              <input
+                id="lastName"
+                name="lastName"
+                type="text"
+                inputmode="text"
+                autocomplete="family-name"
+                spellcheck="false"
+                required
+                maxlength="50"
+                aria-describedby="lastName-help lastName-error lastName-valid"
+              />
+              <div class="assistive">
+                <small id="lastName-help" class="help">Enter your legal last name (will auto-capitalize).</small>
+                <small id="lastName-valid" class="valid" hidden>Looks good!</small>
+                <small id="lastName-error" class="error" role="alert" hidden>Last name is required.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- DOB and Gender row -->
+          <div class="grid grid-2">
+            <div class="form-control">
+              <label for="dob">Date of birth <span aria-hidden="true">*</span></label>
+              <input
+                id="dob"
+                name="dob"
+                type="date"
+                required
+                aria-describedby="dob-help dob-error dob-valid"
+                max=""
+                min=""
+              />
+              <div class="assistive">
+                <small id="dob-help" class="help">Use the date picker. Future dates are not allowed.</small>
+                <small id="dob-valid" class="valid" hidden>Valid date.</small>
+                <small id="dob-error" class="error" role="alert" hidden>Please provide a valid date of birth.</small>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="gender">Gender</label>
+              <select id="gender" name="gender" aria-describedby="gender-help">
+                <option value="">Prefer not to say</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+                <option value="nonbinary">Non-binary</option>
+                <option value="self-describe">Self-describe</option>
+              </select>
+              <div class="assistive">
+                <small id="gender-help" class="help">Optional.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Phone and Email row -->
+          <div class="grid grid-2">
+            <div class="form-control">
+              <label for="phone">Phone <span aria-hidden="true">*</span></label>
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel"
+                required
+                aria-describedby="phone-help phone-error phone-valid"
+                pattern="^\+?[0-9\s\-\(\)]{7,20}$"
+                maxlength="20"
+              />
+              <div class="assistive">
+                <small id="phone-help" class="help">Format: +123 456 7890 or (123) 456-7890.</small>
+                <small id="phone-valid" class="valid" hidden>Phone looks valid.</small>
+                <small id="phone-error" class="error" role="alert" hidden>Enter a valid phone number.</small>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="email">Email <span aria-hidden="true">*</span></label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                inputmode="email"
+                autocomplete="email"
+                required
+                maxlength="100"
+                aria-describedby="email-help email-error email-valid"
+              />
+              <div class="assistive">
+                <small id="email-help" class="help">We'll send confirmations to this address.</small>
+                <small id="email-valid" class="valid" hidden>Email looks valid.</small>
+                <small id="email-error" class="error" role="alert" hidden>Enter a valid email address.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Address -->
+          <div class="form-control">
+            <label for="address1">Address line 1 <span aria-hidden="true">*</span></label>
+            <input
+              id="address1"
+              name="address1"
+              type="text"
+              autocomplete="address-line1"
+              required
+              maxlength="120"
+              aria-describedby="address1-help address1-error address1-valid"
+            />
+            <div class="assistive">
+              <small id="address1-help" class="help">Street address, P.O. box, company name.</small>
+              <small id="address1-valid" class="valid" hidden>Looks good.</small>
+              <small id="address1-error" class="error" role="alert" hidden>Address is required.</small>
+            </div>
+          </div>
+
+          <div class="form-control">
+            <label for="address2">Address line 2</label>
+            <input
+              id="address2"
+              name="address2"
+              type="text"
+              autocomplete="address-line2"
+              maxlength="120"
+              aria-describedby="address2-help address2-valid"
+            />
+            <div class="assistive">
+              <small id="address2-help" class="help">Apartment, suite, unit, building, floor, etc.</small>
+              <small id="address2-valid" class="valid" hidden>Recorded.</small>
+            </div>
+          </div>
+
+          <!-- City, Postal, Country -->
+          <div class="grid grid-3">
+            <div class="form-control">
+              <label for="city">City <span aria-hidden="true">*</span></label>
+              <input
+                id="city"
+                name="city"
+                type="text"
+                autocomplete="address-level2"
+                required
+                maxlength="80"
+                aria-describedby="city-help city-error city-valid"
+              />
+              <div class="assistive">
+                <small id="city-help" class="help">Your city or municipality.</small>
+                <small id="city-valid" class="valid" hidden>Looks good.</small>
+                <small id="city-error" class="error" role="alert" hidden>City is required.</small>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="postalCode">Postal code <span aria-hidden="true">*</span></label>
+              <input
+                id="postalCode"
+                name="postalCode"
+                type="text"
+                inputmode="text"
+                autocomplete="postal-code"
+                required
+                maxlength="12"
+                aria-describedby="postalCode-help postalCode-error postalCode-valid"
+                pattern="^[A-Za-z0-9\- ]{3,12}$"
+              />
+              <div class="assistive">
+                <small id="postalCode-help" class="help">Format: letters/digits (3–12 chars), e.g., 10000 or SW1A 1AA.</small>
+                <small id="postalCode-valid" class="valid" hidden>Postal code looks valid.</small>
+                <small id="postalCode-error" class="error" role="alert" hidden>Please enter a valid postal code.</small>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="country">Country <span aria-hidden="true">*</span></label>
+              <select
+                id="country"
+                name="country"
+                autocomplete="country-name"
+                required
+                aria-describedby="country-help country-error country-valid"
+              >
+                <option value="">Select a country</option>
+                <option value="Kosovo">Kosovo</option>
+                <option value="Albania">Albania</option>
+                <option value="North Macedonia">North Macedonia</option>
+                <option value="Serbia">Serbia</option>
+                <option value="Montenegro">Montenegro</option>
+                <option value="Greece">Greece</option>
+                <option value="Italy">Italy</option>
+                <option value="Germany">Germany</option>
+                <option value="France">France</option>
+                <option value="United Kingdom">United Kingdom</option>
+                <option value="United States">United States</option>
+                <!-- Include more as needed -->
+              </select>
+              <div class="assistive">
+                <small id="country-help" class="help">Required for billing and insurance eligibility.</small>
+                <small id="country-valid" class="valid" hidden>Selected.</small>
+                <small id="country-error" class="error" role="alert" hidden>Country is required.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step navigation -->
+          <div class="nav-row">
+            <button type="button" class="btn btn-secondary" id="back-1" data-action="back" disabled aria-disabled="true">
+              Back
+            </button>
+            <button type="button" class="btn btn-primary" id="next-1" data-action="next" data-next="2">
+              Next
+            </button>
+          </div>
+        </fieldset>
+
+        <!--
+          Step 2: Insurance
+          - Searchable provider dropdown (custom combobox; keyboard navigable)
+          - Policy number + confirmation (password-like), pattern enforced
+          - Group number (optional)
+          - Coverage start date
+          - Insurer phone with masking
+        -->
+        <fieldset
+          id="step-2"
+          class="form-step"
+          role="group"
+          aria-labelledby="legend-step-2"
+          data-step="2"
+          data-step-name="Insurance"
+          hidden
+        >
+          <legend id="legend-step-2">Insurance</legend>
+          <p class="step-intro" id="intro-step-2">
+            Provide your insurance details. Use the searchable provider field to find your insurer.
+          </p>
+
+          <!-- Provider searchable combobox -->
+          <div class="form-control">
+            <label for="provider-input">Insurance provider <span aria-hidden="true">*</span></label>
+
+            <!--
+              Custom Combobox Pattern:
+                - Input with role="combobox", aria-autocomplete="list", aria-expanded, aria-controls
+                - Popup listbox with role="listbox"; options with role="option"
+                - Keyboard support: ArrowUp/Down, Enter, Esc, Home/End; type-to-filter
+                - JS ensures aria-activedescendant on input to reflect focused option
+            -->
+            <div class="combo" id="provider-combobox">
+              <input
+                id="provider-input"
+                name="provider"
+                type="text"
+                class="combo-input"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="provider-listbox"
+                aria-activedescendant=""
+                autocomplete="off"
+                placeholder="Search providers..."
+                required
+                aria-describedby="provider-help provider-error provider-valid"
+              />
+              <button
+                type="button"
+                class="combo-toggle"
+                aria-label="Toggle provider list"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                id="provider-toggle"
+              >
+                ▼
+              </button>
+
+              <ul
+                id="provider-listbox"
+                class="combo-listbox"
+                role="listbox"
+                tabindex="-1"
+                hidden
+              >
+                <!-- Options dynamically filtered/populated by JS from a static array -->
+              </ul>
+            </div>
+
+            <div class="assistive">
+              <small id="provider-help" class="help">Type to filter, then use arrow keys to choose and Enter to select.</small>
+              <small id="provider-valid" class="valid" hidden>Provider selected.</small>
+              <small id="provider-error" class="error" role="alert" hidden>Provider is required.</small>
+            </div>
+          </div>
+
+          <!-- Policy and confirmation -->
+          <div class="grid grid-2">
+            <div class="form-control">
+              <label for="policyNumber">Policy number <span aria-hidden="true">*</span></label>
+              <input
+                id="policyNumber"
+                name="policyNumber"
+                type="text"
+                inputmode="text"
+                required
+                maxlength="25"
+                aria-describedby="policyNumber-help policyNumber-error policyNumber-valid"
+                pattern="^[A-Za-z0-9\-]{6,25}$"
+              />
+              <div class="assistive">
+                <small id="policyNumber-help" class="help">6–25 chars, letters/numbers/hyphen only.</small>
+                <small id="policyNumber-valid" class="valid" hidden>Policy number looks valid.</small>
+                <small id="policyNumber-error" class="error" role="alert" hidden>Enter a valid policy number.</small>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="policyConfirm">Confirm policy number <span aria-hidden="true">*</span></label>
+              <input
+                id="policyConfirm"
+                name="policyConfirm"
+                type="password"
+                inputmode="text"
+                required
+                maxlength="25"
+                aria-describedby="policyConfirm-help policyConfirm-error policyConfirm-valid"
+              />
+              <div class="assistive">
+                <small id="policyConfirm-help" class="help">Must match the policy number exactly.</small>
+                <small id="policyConfirm-valid" class="valid" hidden>Matches.</small>
+                <small id="policyConfirm-error" class="error" role="alert" hidden>Policy numbers do not match.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Group number and coverage start -->
+          <div class="grid grid-2">
+            <div class="form-control">
+              <label for="groupNumber">Group number</label>
+              <input
+                id="groupNumber"
+                name="groupNumber"
+                type="text"
+                inputmode="text"
+                maxlength="25"
+                aria-describedby="groupNumber-help groupNumber-valid"
+                pattern="^[A-Za-z0-9\-]{0,25}$"
+              />
+              <div class="assistive">
+                <small id="groupNumber-help" class="help">Optional. Letters/numbers/hyphens only.</small>
+                <small id="groupNumber-valid" class="valid" hidden>Recorded.</small>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="coverageStart">Coverage start date <span aria-hidden="true">*</span></label>
+              <input
+                id="coverageStart"
+                name="coverageStart"
+                type="date"
+                required
+                aria-describedby="coverageStart-help coverageStart-error coverageStart-valid"
+                max=""
+              />
+              <div class="assistive">
+                <small id="coverageStart-help" class="help">Cannot be in the future.</small>
+                <small id="coverageStart-valid" class="valid" hidden>Date is valid.</small>
+                <small id="coverageStart-error" class="error" role="alert" hidden>Please provide a valid date.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Insurer phone -->
+          <div class="form-control">
+            <label for="insurerPhone">Insurer contact phone</label>
+            <input
+              id="insurerPhone"
+              name="insurerPhone"
+              type="tel"
+              inputmode="tel"
+              autocomplete="tel"
+              aria-describedby="insurerPhone-help insurerPhone-error insurerPhone-valid"
+              pattern="^\+?[0-9\s\-\(\)]{7,20}$"
+              maxlength="20"
+            />
+            <div class="assistive">
+              <small id="insurerPhone-help" class="help">Format: +123 456 7890 or (123) 456-7890.</small>
+              <small id="insurerPhone-valid" class="valid" hidden>Looks valid.</small>
+              <small id="insurerPhone-error" class="error" role="alert" hidden>Enter a valid phone number.</small>
+            </div>
+          </div>
+
+          <!-- Step navigation -->
+          <div class="nav-row">
+            <button type="button" class="btn btn-secondary" id="back-2" data-action="back" data-prev="1">
+              Back
+            </button>
+            <button type="button" class="btn btn-primary" id="next-2" data-action="next" data-next="3">
+              Next
+            </button>
+          </div>
+        </fieldset>
+
+        <!--
+          Step 3: Medical History
+          - Allergy chips (add/remove; color-coded)
+          - Conditions (checkboxes)
+          - Medications and notes textareas with live character counters
+        -->
+        <fieldset
+          id="step-3"
+          class="form-step"
+          role="group"
+          aria-labelledby="legend-step-3"
+          data-step="3"
+          data-step-name="Medical History"
+          hidden
+        >
+          <legend id="legend-step-3">Medical history</legend>
+          <p class="step-intro" id="intro-step-3">
+            Tell us about allergies, conditions, and medications to help us prepare your care.
+          </p>
+
+          <!-- Allergy chips input -->
+          <div class="form-control">
+            <label for="allergyInput">Allergies</label>
+            <div class="chips" id="allergy-chips" role="group" aria-label="Allergy tags">
+              <!-- Dynamically created chip elements inserted here -->
+            </div>
+            <div class="chip-input-wrap">
+              <input
+                id="allergyInput"
+                name="allergyInput"
+                type="text"
+                placeholder="Type an allergy and press Enter"
+                aria-describedby="allergyInput-help"
+                maxlength="40"
+                autocomplete="off"
+              />
+              <button type="button" id="add-allergy" class="btn btn-ghost" aria-label="Add allergy tag">
+                Add
+              </button>
+            </div>
+            <div class="assistive">
+              <small id="allergyInput-help" class="help">Examples: Penicillin, Nuts, Latex, Pollen.</small>
+            </div>
+          </div>
+
+          <!-- Common conditions -->
+          <fieldset class="subgroup" aria-labelledby="legend-conditions">
+            <legend id="legend-conditions">Common conditions</legend>
+            <p class="help">Select all that apply.</p>
+            <div class="grid grid-3">
+              <div class="checkbox">
+                <input type="checkbox" id="cond-asthma" name="conditions" value="Asthma" />
+                <label for="cond-asthma">Asthma</label>
+              </div>
+              <div class="checkbox">
+                <input type="checkbox" id="cond-diabetes" name="conditions" value="Diabetes" />
+                <label for="cond-diabetes">Diabetes</label>
+              </div>
+              <div class="checkbox">
+                <input type="checkbox" id="cond-hypertension" name="conditions" value="Hypertension" />
+                <label for="cond-hypertension">Hypertension</label>
+              </div>
+              <div class="checkbox">
+                <input type="checkbox" id="cond-heart" name="conditions" value="Heart disease" />
+                <label for="cond-heart">Heart disease</label>
+              </div>
+              <div class="checkbox">
+                <input type="checkbox" id="cond-thyroid" name="conditions" value="Thyroid disorder" />
+                <label for="cond-thyroid">Thyroid disorder</label>
+              </div>
+              <div class="checkbox">
+                <input type="checkbox" id="cond-mental" name="conditions" value="Mental health" />
+                <label for="cond-mental">Mental health</label>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Medications -->
+          <div class="form-control">
+            <label for="medications">Current medications</label>
+            <textarea
+              id="medications"
+              name="medications"
+              rows="4"
+              maxlength="500"
+              aria-describedby="medications-help medications-counter"
+            ></textarea>
+            <div class="assistive">
+              <small id="medications-help" class="help">List names and dosages if possible.</small>
+              <small id="medications-counter" class="counter" aria-live="polite">0 / 500</small>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="form-control">
+            <label for="notes">Additional notes</label>
+            <textarea
+              id="notes"
+              name="notes"
+              rows="5"
+              maxlength="1000"
+              aria-describedby="notes-help notes-counter"
+            ></textarea>
+            <div class="assistive">
+              <small id="notes-help" class="help">Anything else we should know (e.g., recent surgeries, pregnancies, etc.).</small>
+              <small id="notes-counter" class="counter" aria-live="polite">0 / 1000</small>
+            </div>
+          </div>
+
+          <!-- Step navigation -->
+          <div class="nav-row">
+            <button type="button" class="btn btn-secondary" id="back-3" data-action="back" data-prev="2">
+              Back
+            </button>
+            <button type="button" class="btn btn-primary" id="next-3" data-action="next" data-next="4">
+              Next
+            </button>
+          </div>
+        </fieldset>
+
+        <!--
+          Step 4: Review & Submit
+          - Read-only summary of all inputs
+          - Edit buttons to jump to steps
+          - Final submission triggers last validation and simulated API call
+          - Print-friendly view is handled via CSS @media print
+        -->
+        <fieldset
+          id="step-4"
+          class="form-step"
+          role="group"
+          aria-labelledby="legend-step-4"
+          data-step="4"
+          data-step-name="Review & Submit"
+          hidden
+        >
+          <legend id="legend-step-4">Review &amp; Submit</legend>
+          <p class="step-intro" id="intro-step-4">
+            Review your information carefully. Use Edit to correct any section, then submit when ready.
+          </p>
+
+          <!-- Summary sections; JS will populate values -->
+          <section class="summary-section" aria-labelledby="summary-demographics-title">
+            <div class="summary-header">
+              <h3 id="summary-demographics-title">Demographics</h3>
+              <button type="button" class="btn btn-link edit-section" data-edit-step="1" aria-label="Edit demographics">Edit</button>
+            </div>
+            <dl class="summary-list" id="summary-demographics">
+              <div class="summary-row">
+                <dt>First name</dt><dd id="sum-firstName">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Last name</dt><dd id="sum-lastName">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Date of birth</dt><dd id="sum-dob">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Gender</dt><dd id="sum-gender">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Phone</dt><dd id="sum-phone">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Email</dt><dd id="sum-email">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Address</dt><dd id="sum-address">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>City</dt><dd id="sum-city">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Postal code</dt><dd id="sum-postalCode">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Country</dt><dd id="sum-country">—</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="summary-section" aria-labelledby="summary-insurance-title">
+            <div class="summary-header">
+              <h3 id="summary-insurance-title">Insurance</h3>
+              <button type="button" class="btn btn-link edit-section" data-edit-step="2" aria-label="Edit insurance">Edit</button>
+            </div>
+            <dl class="summary-list" id="summary-insurance">
+              <div class="summary-row">
+                <dt>Provider</dt><dd id="sum-provider">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Policy number</dt><dd id="sum-policyNumber">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Group number</dt><dd id="sum-groupNumber">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Coverage start</dt><dd id="sum-coverageStart">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Insurer phone</dt><dd id="sum-insurerPhone">—</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="summary-section" aria-labelledby="summary-history-title">
+            <div class="summary-header">
+              <h3 id="summary-history-title">Medical history</h3>
+              <button type="button" class="btn btn-link edit-section" data-edit-step="3" aria-label="Edit medical history">Edit</button>
+            </div>
+            <dl class="summary-list" id="summary-history">
+              <div class="summary-row">
+                <dt>Allergies</dt><dd id="sum-allergies">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Conditions</dt><dd id="sum-conditions">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Medications</dt><dd id="sum-medications">—</dd>
+              </div>
+              <div class="summary-row">
+                <dt>Notes</dt><dd id="sum-notes">—</dd>
+              </div>
+            </dl>
+          </section>
+
+          <!-- Final controls -->
+          <div class="nav-row">
+            <button type="button" class="btn btn-secondary" id="back-4" data-action="back" data-prev="3">
+              Back
+            </button>
+            <button type="submit" class="btn btn-success" id="submit-form" aria-label="Submit the form">
+              Submit
+            </button>
+          </div>
+
+          <!-- Submission status -->
+          <div class="submission-status" role="status" aria-live="polite" id="submission-status" hidden>
+            Submitting, please wait…
+          </div>
+        </fieldset>
+      </form>
+
+      <!--
+        Footer help:
+          - Short keyboard instructions and accessibility promise.
+      -->
+      <aside class="form-help" aria-label="Help and accessibility">
+        <h3 class="help-title">Keyboard & accessibility</h3>
+        <ul class="help-list">
+          <li><strong>Navigation:</strong> Tab / Shift+Tab moves focus; Enter activates; Space toggles.</li>
+          <li><strong>Steps:</strong> Next and Back buttons move between steps. Progress is saved automatically.</li>
+          <li><strong>Searchable lists:</strong> Type to filter, Arrow keys to move, Enter to select, Esc to close.</li>
+          <li><strong>Errors:</strong> We focus the first invalid field and describe the issue clearly.</li>
+          <li><strong>Contrast:</strong> Use the high contrast button for better visibility.</li>
+          <li><strong>Print:</strong> Printing hides controls and shows a clean summary.</li>
+        </ul>
+      </aside>
+
+    </div>
+  </main>
+
+  <!--
+    App Footer:
+      - role="contentinfo"
+      - Can include clinic info or legal disclaimers
+  -->
+  <footer class="app-footer" role="contentinfo">
+    <div class="container footer-inner">
+      <p class="fineprint">
+        Your information is stored locally on this device while filling the form and is cleared after successful submission.
+      </p>
+    </div>
+  </footer>
+
+  <!--
+    Templates (if needed):
+      - For dynamic chip elements or listbox options, JS builds DOM directly.
+      - Kept minimal to reduce duplication; we rely on JS factory functions.
+  -->
+
+  <!--
+    Modal (optional):
+      - Not used in this form to keep flow simple and accessible.
+  -->
+
+  <!--
+    Script:
+      - Defer loading until DOM is parsed.
+      - Contains:
+        * Step navigation & animations
+        * Validation & formatting
+        * Autosave (localStorage)
+        * Searchable combobox
+        * Allergy chips
+        * Review population
+        * Print & High-contrast toggles
+        * Accessibility helpers (focus, ARIA updates, keyboard shortcuts)
+  -->
+  <script src="script.js" defer></script>
+
+  <!--
+    End of document:
+      - Ensure no duplicate IDs.
+      - All labels connected with for/id.
+      - Landmarks and roles validated.
+      - Progressive enhancement: works with keyboard and screen readers.
+  -->
+</body>
+</html>
