@@ -289,6 +289,10 @@ function initEvents() {
   // Next/Back
   nextButtons.forEach(btn => btn.addEventListener('click', handleNext));
   backButtons.forEach(btn => btn.addEventListener('click', handleBack));
+  console.log(`Bound ${nextButtons.length} Next buttons and ${backButtons.length} Back buttons`);
+
+}
+
 
   // Submit
   if (form) {
